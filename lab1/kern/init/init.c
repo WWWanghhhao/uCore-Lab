@@ -28,11 +28,15 @@ int kern_init(void) {
 
     idt_init();  // init interrupt descriptor table
 
+    //asm volatile("ebreak"::);
+    //asm volatile("mret"::);
+
     // rdtime in mbare mode crashes
     clock_init();  // init clock interrupt
 
     intr_enable();  // enable irq interrupt
     
+
     while (1)
         ;
 }
