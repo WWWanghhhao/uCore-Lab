@@ -116,7 +116,7 @@ void interrupt_handler(struct trapframe *tf) {
     clock_set_next_event();
     ticks += 1;
     if (ticks % TICK_NUM == 0) {
-
+      ticks = 0;
       print_ticks();
       num += 1;
       if (num == 10) {
@@ -163,6 +163,9 @@ void exception_handler(struct trapframe *tf) {
      *(2)输出异常指令地址
      *(3)更新 tf->epc寄存器
      */
+    cprintf("Exception type:Illegal instruction\n");
+    cprintf("Illegal instruction caught at 0x%d\n", tf->epc);
+    tf->epc += 4;
     break;
   case CAUSE_BREAKPOINT:
     // 断点异常处理
@@ -171,6 +174,10 @@ void exception_handler(struct trapframe *tf) {
      *(2)输出异常指令地址
      *(3)更新 tf->epc寄存器
      */
+    cprintf("Exception type: breakpoint\n");
+    cprintf("ebreak caught at 0x%d\n", tf->epc);
+    // ebreak 指令长度仅为 2 字节
+    tf->epc += 2;
     break;
   case CAUSE_MISALIGNED_LOAD:
     break;
