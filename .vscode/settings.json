@@ -1,0 +1,6 @@
+{
+    "typescript.disableAutomaticTypeAcquisition": true,
+    "files.associations": {
+        "sbi.h": "c"
+    }
+}
