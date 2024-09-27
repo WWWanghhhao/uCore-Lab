@@ -41,9 +41,9 @@ struct pushregs {
 struct trapframe {
     struct pushregs gpr;
     uintptr_t status;
-    uintptr_t epc;
-    uintptr_t tval;
-    uintptr_t cause;
+    uintptr_t epc;// 记录触发中断的那条指令的地址
+    uintptr_t tval;// 记录一些中断处理所需要的辅助信息
+    uintptr_t cause;// 记录中断发生的原因
 };
 
 void trap(struct trapframe *tf);

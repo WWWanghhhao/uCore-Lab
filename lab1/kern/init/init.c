@@ -17,7 +17,7 @@ int kern_init(void) {
     extern char edata[], end[];
     memset(edata, 0, end - edata);
 
-    cons_init();  // init the console
+    cons_init();  // initializes the console devices
 
     const char *message = "(THU.CST) os is loading ...\n";
     cprintf("%s\n\n", message);
