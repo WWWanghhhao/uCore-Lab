@@ -11,6 +11,23 @@
 #include <../sync/sync.h>
 #include <riscv.h>
 
+#define PMM_FIRST_FIT 0
+#define PMM_BEST_FIT 1
+#define PMM_BUDDY_SYSTEM 2
+#define PMM_SLUB_ALLOCATOR 3
+
+#define PMM_MANAGER PMM_BUDDY_SYSTEM
+#if PMM_MANAGER == PMM_FIRST_FIT
+#include <default_pmm.h>
+#elif PMM_MANAGER == PMM_BEST_FIT
+#include <best_fit_pmm.h>
+#elif PMM_MANAGER == PMM_BUDDY_SYSTEM
+#include <buddy_pmm.h>
+#elif PMM_MANAGER == PMM_SLUB_ALLOCATOR
+#include <buddy_pmm.h>
+#include <slub_pmm.h>
+#endif
+
 // virtual address of physical page array
 struct Page *pages;
 // amount of physical memory (in pages)
@@ -26,6 +43,8 @@ uintptr_t *satp_virtual = NULL;
 // physical address of boot-time page directory
 uintptr_t satp_physical;
 
+
+
 // physical memory management
 const struct pmm_manager *pmm_manager;
 
@@ -34,7 +53,15 @@ static void check_alloc_page(void);
 
 // init_pmm_manager - initialize a pmm_manager instance
 static void init_pmm_manager(void) {
+#if PMM_MANAGER == PMM_FIRST_FIT
+    pmm_manager = &default_pmm_manager;
+#elif PMM_MANAGER == PMM_BEST_FIT
     pmm_manager = &best_fit_pmm_manager;
+#elif PMM_MANAGER == PMM_BUDDY_SYSTEM
+    pmm_manager = &buddy_pmm_manager;
+#elif PMM_MANAGER == PMM_SLUB_ALLOCATOR
+    pmm_manager = &slub_pmm_manager;
+#endif
     cprintf("memory management: %s\n", pmm_manager->name);
     pmm_manager->init();
 }

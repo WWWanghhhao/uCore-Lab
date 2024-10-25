@@ -22,8 +22,21 @@
  *              you can find some MACRO: le2page (in memlayout.h), (in future labs: le2vma (in vmm.h), le2proc (in proc.h),etc.)
  * (2) default_init: you can reuse the  demo default_init fun to init the free_list and set nr_free to 0.
  *              free_list is used to record the free mem blocks. nr_free is the total number for free mem blocks.
- * (3) default_init_memmap:  CALL GRAPH: kern_init --> pmm_init-->page_init-->init_memmap--> pmm_manager->init_memmap
- *              This fun is used to init a free block (with parameter: addr_base, page_number).
+ * 
+ * 
+ */
+
+free_area_t free_area;
+
+#define free_list (free_area.free_list)
+#define nr_free (free_area.nr_free)
+
+static void
+best_fit_init(void) {
+    list_init(&free_list);
+    nr_free = 0;
+}
+/*This fun is used to init a free block (with parameter: addr_base, page_number).
  *              First you should init each page (in memlayout.h) in this free block, include:
  *                  p->flags should be set bit PG_property (means this page is valid. In pmm_init fun (in pmm.c),
  *                  the bit PG_reserved is setted in p->flags)
@@ -31,8 +44,43 @@
  *                  if this page  is free and is the first page of free block, p->property should be set to total num of block.
  *                  p->ref should be 0, because now p is free and no reference.
  *                  We can use p->page_link to link this page to free_list, (such as: list_add_before(&free_list, &(p->page_link)); )
- *              Finally, we should sum the number of free mem block: nr_free+=n
- * (4) default_alloc_pages: search find a first free block (block size >=n) in free list and reszie the free block, return the addr
+ *              Finally, we should sum the number of free mem block: nr_free+=n*/
+static void
+best_fit_init_memmap(struct Page *base, size_t n) {
+    assert(n > 0);
+    struct Page *p = base;
+    for (; p != base + n; p ++) {
+        assert(PageReserved(p));
+        /*LAB2 EXERCISE 2: YOUR CODE*/ 
+        // 清空当前页框的标志和属性信息，并将页框的引用计数设置为0
+        p->flags = p->property = 0;
+        set_page_ref(p, 0);
+    }
+    base->property = n;
+    SetPageProperty(base);
+    nr_free += n;
+    if (list_empty(&free_list)) {
+        list_add(&free_list, &(base->page_link));
+    } else {
+        list_entry_t* le = &free_list;
+        while ((le = list_next(le)) != &free_list) {
+            struct Page* page = le2page(le, page_link);
+             /*LAB2 EXERCISE 2: YOUR CODE*/ 
+            // 编写代码
+            // 1、当base < page时，找到第一个大于base的页，将base插入到它前面，并退出循环
+            // 2、当list_next(le) == &free_list时，若已经到达链表结尾，将base插入到链表尾部
+            if (base < page) {
+                list_add_before(le, &(base->page_link));
+                break;
+            } else if (list_next(le) == &free_list) {
+                list_add(le, &(base->page_link));
+            }
+        }
+    }
+}
+
+
+/*(4) default_alloc_pages: search find a first free block (block size >=n) in free list and reszie the free block, return the addr
  *              of malloced block.
  *              (4.1) So you should search freelist like this:
  *                       list_entry_t le = &free_list;
@@ -48,51 +96,7 @@
  *                           (such as: le2page(le,page_link))->property = p->property - n;)
  *                 (4.1.3)  re-caluclate nr_free (number of the the rest of all free block)
  *                 (4.1.4)  return p
- *               (4.2) If we can not find a free block (block size >=n), then return NULL
- * (5) default_free_pages: relink the pages into  free list, maybe merge small free blocks into big free blocks.
- *               (5.1) according the base addr of withdrawed blocks, search free list, find the correct position
- *                     (from low to high addr), and insert the pages. (may use list_next, le2page, list_add_before)
- *               (5.2) reset the fields of pages, such as p->ref, p->flags (PageProperty)
- *               (5.3) try to merge low addr or high addr blocks. Notice: should change some pages's p->property correctly.
- */
-free_area_t free_area;
-
-#define free_list (free_area.free_list)
-#define nr_free (free_area.nr_free)
-
-static void
-best_fit_init(void) {
-    list_init(&free_list);
-    nr_free = 0;
-}
-
-static void
-best_fit_init_memmap(struct Page *base, size_t n) {
-    assert(n > 0);
-    struct Page *p = base;
-    for (; p != base + n; p ++) {
-        assert(PageReserved(p));
-
-        /*LAB2 EXERCISE 2: YOUR CODE*/ 
-        // 清空当前页框的标志和属性信息，并将页框的引用计数设置为0
-    }
-    base->property = n;
-    SetPageProperty(base);
-    nr_free += n;
-    if (list_empty(&free_list)) {
-        list_add(&free_list, &(base->page_link));
-    } else {
-        list_entry_t* le = &free_list;
-        while ((le = list_next(le)) != &free_list) {
-            struct Page* page = le2page(le, page_link);
-             /*LAB2 EXERCISE 2: YOUR CODE*/ 
-            // 编写代码
-            // 1、当base < page时，找到第一个大于base的页，将base插入到它前面，并退出循环
-            // 2、当list_next(le) == &free_list时，若已经到达链表结尾，将base插入到链表尾部
-        }
-    }
-}
-
+ *               (4.2) If we can not find a free block (block size >=n), then return NULL*/
 static struct Page *
 best_fit_alloc_pages(size_t n) {
     assert(n > 0);
@@ -101,21 +105,21 @@ best_fit_alloc_pages(size_t n) {
     }
     struct Page *page = NULL;
     list_entry_t *le = &free_list;
-    size_t min_size = nr_free + 1;
+    size_t min_size = nr_free + 1;//+inf
      /*LAB2 EXERCISE 2: YOUR CODE*/ 
     // 下面的代码是first-fit的部分代码，请修改下面的代码改为best-fit
     // 遍历空闲链表，查找满足需求的空闲页框
     // 如果找到满足需求的页面，记录该页面以及当前找到的最小连续空闲页框数量
     while ((le = list_next(le)) != &free_list) {
         struct Page *p = le2page(le, page_link);
-        if (p->property >= n) {
+        if (p->property >= n && p->property < min_size) {
+            min_size = p->property;
             page = p;
-            break;
         }
     }
 
     if (page != NULL) {
-        list_entry_t* prev = list_prev(&(page->page_link));
+        list_entry_t *prev = list_prev(&(page->page_link));
         list_del(&(page->page_link));
         if (page->property > n) {
             struct Page *p = page + n;
@@ -129,6 +133,11 @@ best_fit_alloc_pages(size_t n) {
     return page;
 }
 
+/*(5) default_free_pages: relink the pages into  free list, maybe merge small free blocks into big free blocks.
+ *               (5.1) according the base addr of withdrawed blocks, search free list, find the correct position
+ *                     (from low to high addr), and insert the pages. (may use list_next, le2page, list_add_before)
+ *               (5.2) reset the fields of pages, such as p->ref, p->flags (PageProperty)
+ *               (5.3) try to merge low addr or high addr blocks. Notice: should change some pages's p->property correctly.*/
 static void
 best_fit_free_pages(struct Page *base, size_t n) {
     assert(n > 0);
@@ -141,6 +150,9 @@ best_fit_free_pages(struct Page *base, size_t n) {
     /*LAB2 EXERCISE 2: YOUR CODE*/ 
     // 编写代码
     // 具体来说就是设置当前页块的属性为释放的页块数、并将当前页块标记为已分配状态、最后增加nr_free的值
+    base->property = n;
+    SetPageProperty(base);
+    nr_free += n;
 
     if (list_empty(&free_list)) {
         list_add(&free_list, &(base->page_link));
@@ -167,6 +179,12 @@ best_fit_free_pages(struct Page *base, size_t n) {
         // 3、清除当前页块的属性标记，表示不再是空闲页块
         // 4、从链表中删除当前页块
         // 5、将指针指向前一个空闲页块，以便继续检查合并后的连续空闲页块
+        if (p + p->property == base) {
+            p->property += base->property;
+            ClearPageProperty(base);
+            list_del(&(base->page_link));
+            base = p;
+        }
     }
 
     le = list_next(&(base->page_link));

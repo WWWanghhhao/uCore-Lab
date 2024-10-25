@@ -53,10 +53,12 @@
  *               (5.2) reset the fields of pages, such as p->ref, p->flags (PageProperty)
  *               (5.3) try to merge low addr or high addr blocks. Notice: should change some pages's p->property correctly.
  */
-free_area_t free_area;
 
-#define free_list (free_area.free_list)
-#define nr_free (free_area.nr_free)
+
+free_area_t free_area1;
+
+#define free_list (free_area1.free_list)
+#define nr_free (free_area1.nr_free)//nr_free可以理解为在这里可以使用的一个全局变量，记录可用的物理页面数
 
 static void
 default_init(void) {
