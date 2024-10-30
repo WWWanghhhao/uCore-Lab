@@ -56,6 +56,7 @@ void buddy2_init_memmap(struct Page *base, size_t n) {
   self.size = size;
   node_size = size * 2;
 
+  // 清理 [base, base+n] 内存区域
   struct Page *p = base;
   for (; p != base + n; p++) {
     assert(PageReserved(p));
@@ -67,7 +68,7 @@ void buddy2_init_memmap(struct Page *base, size_t n) {
   SetPageProperty(base);
   nr_free += size;
 
-  // 通过循环计算每个节点所监控的内存块大小
+  // 通过循环计算每个二叉树节点所监控的内存块大小
   size_t i;
   for (i = 0; i < 2 * size - 1; i++) {
     if (IS_POWER_OF_2(i + 1)) {
@@ -199,40 +200,20 @@ static void buddy2_check(void) {
 }
 
 static void basic_check(void) {
-  /*
-  整个测试流程如下:
-  首先申请 p0 p1 p2 p3
-  其大小为 70 35 257 63
-  从前向后分配的块以及其大小 |64+64|64|64|128+128|512|
-  其对应的页               | p0     |p1|p3|空  |p2|
-  然后释放p0\p1\p3
-  这时候前512个页已经空了
-  然后我们申请 p4 p5
-  其大小为     255 255
-  那么这时候系统的内存空间是这样的
-  |256|256|256|
-  |p4 |p5 |p2 |
-  最后释放。
-  注意，指针的地址都是块的首地址。
-  通过计算验证，然后将结果打印出来，较为直观。也可以通过断言机制assert()判定。
-  */
   cprintf("-----------------------------------------------------"
           "\n\nThe test process is as follows:\n"
           "First,alloc   p0 p1 p2  p3\n"
-          "sizes of them 70 35 257 63\n"
+          "sizes of them 80 40 260 60\n"
           "the buddy block:    |64+64|64|64|128+128|512|\n"
           "the pages we alloc: |p0   |p1|p3|empty  |p2|\n"
           "then,free. p0 p1 p3\n"
           "now,the first 512 pages are free\n"
           "then alloc:     p4  p5\n"
-          "sizes of the:   255 255\n"
+          "sizes of the:   250 250\n"
           "now,the distribution in memory space are below:\n"
           "|256|256|256|\n"
           "|p4 |p5 |p2 |\n"
-          "Last,free all buddy blocks.\n"
-          "Notice!addr of pointer is the base addr of the buddy block\n"
-          "we use cprintf() show the progress and if you want, you can use "
-          "assert() to judge.\n\n"
+          "Last,free all buddy blocks.\n\n"
           "------------------------------------------------------\n");
 
   struct Page *p0, *p1, *p2;
@@ -246,40 +227,39 @@ static void basic_check(void) {
   free_page(p1);
   free_page(p2);
 
-  p0 = alloc_pages(70);
-  p1 = alloc_pages(35);
-  // 注意，一个结构体指针是20个字节，有3个int,3*4，还有一个双向链表,两个指针是8。加载一起是20。
+  p0 = alloc_pages(80);
+  p1 = alloc_pages(40);
   cprintf("p0 %p\n", p0);
   cprintf("p1 %p\n", p1);
   cprintf("p1-p0 equal %p ?=128\n", p1 - p0); // 应该差128
 
-  p2 = alloc_pages(257);
+  p2 = alloc_pages(260);
   cprintf("p2 %p\n", p2);
   cprintf("p2-p1 equal %p ?=128+256\n", p2 - p1); // 应该差384
 
-  p3 = alloc_pages(63);
+  p3 = alloc_pages(60);
   cprintf("p3 %p\n", p3);
   cprintf("p3-p1 equal %p ?=64\n", p3 - p1); // 应该差64
 
-  free_pages(p0, 70);
+  free_pages(p0, 80);
   cprintf("free p0!\n");
-  free_pages(p1, 35);
+  free_pages(p1, 40);
   cprintf("free p1!\n");
-  free_pages(p3, 63);
+  free_pages(p3, 60);
   cprintf("free p3!\n");
 
-  p4 = alloc_pages(255);
+  p4 = alloc_pages(250);
   cprintf("p4 %p\n", p4);
   cprintf("p2-p4 equal %p ?=512\n", p2 - p4); // 应该差512
 
-  p5 = alloc_pages(255);
+  p5 = alloc_pages(250);
   cprintf("p5 %p\n", p5);
   cprintf("p5-p4 equal %p ?=256\n", p5 - p4); // 应该差256
-  free_pages(p2, 257);
+  free_pages(p2, 260);
   cprintf("free p2!\n");
-  free_pages(p4, 255);
+  free_pages(p4, 250);
   cprintf("free p4!\n");
-  free_pages(p5, 255);
+  free_pages(p5, 250);
   cprintf("free p5!\n");
   cprintf("CHECK DONE!\n");
 }

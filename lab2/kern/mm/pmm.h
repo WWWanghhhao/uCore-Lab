@@ -15,14 +15,14 @@
 // by ucore to manage the total physical memory space.
 struct pmm_manager {
     const char *name;  // XXX_pmm_manager's name
-    void (*init)(
+    void (*init)(// 初始化XXX_pmm_manager内部的数据结构（如空闲页面的链表）
         void);  // initialize internal description&management data structure
                 // (free block list, number of free block) of XXX_pmm_manager
-    void (*init_memmap)(
+    void (*init_memmap)(//知道了可用的物理页面数目之后，进行更详细的初始化
         struct Page *base,
         size_t n);  // setup description&management data structcure according to
                     // the initial free physical memory space
-    struct Page *(*alloc_pages)(
+    struct Page *(*alloc_pages)(// 分配至少n个物理页面, 根据分配算法可能返回不同的结果
         size_t n);  // allocate >=n pages, depend on the allocation algorithm
     void (*free_pages)(struct Page *base, size_t n);  // free >=n pages with
                                                       // "base" addr of Page
@@ -52,6 +52,7 @@ size_t nr_free_pages(void); // number of free pages
  * corresponding physical address.  It panics if you pass it a non-kernel
  * virtual address.
  * */
+// 将内核虚拟地址转换为物理地址，并在输入无效地址时触发系统崩溃；确保内存访问的安全性和正确性。
 #define PADDR(kva)                                                 \
     ({                                                             \
         uintptr_t __m_kva = (uintptr_t)(kva);                      \
