@@ -44,10 +44,10 @@ void clock_init(void) {
     ticks = 0;
     
     // mret 和 ebreak 异常处理测试
-    __asm__ volatile("mret");
-    __asm__ volatile("nop");
-    __asm__ volatile("ebreak");
-    __asm__ volatile("nop");
+    // __asm__ volatile("mret");
+    // __asm__ volatile("nop");
+    // __asm__ volatile("ebreak");
+    // __asm__ volatile("nop");
 
     cprintf("++ setup timer interrupts\n");
 }
