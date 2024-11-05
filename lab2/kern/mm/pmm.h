@@ -76,15 +76,15 @@ size_t nr_free_pages(void); // number of free pages
 // KADDR 用于将物理地址转换为内核虚拟地址：
 // 它根据物理页号（PPN）检查地址是否合法（即是否超过总页数 npage）
 // 如果地址合法，它将物理地址加上偏移量 va_pa_offset，得到虚拟地址
-#define KADDR(pa)                                                
-    ({                                                           
-        uintptr_t __m_pa = (pa);                                 
-        size_t __m_ppn = PPN(__m_pa);                            
-        if (__m_ppn >= npage) {                                  
-            panic("KADDR called with invalid pa %08lx", __m_pa); 
-        }                                                        
-        (void *)(__m_pa + va_pa_offset);                         
-    })
+#define KADDR(pa)                                                \
+    ({                                                           \
+        uintptr_t __m_pa = (pa);                                 \
+        size_t __m_ppn = PPN(__m_pa);                            \
+        if (__m_ppn >= npage) {                                  \
+            panic("KADDR called with invalid pa %08lx", __m_pa); \
+        }                                                        \
+        (void *)(__m_pa + va_pa_offset);                         \
+    })                                                         
 
 extern struct Page *pages; //用于管理物理页的数组，每个元素是一个 Page 结构体，表示一个物理页
 extern size_t npage; //表示系统中物理内存的页数

@@ -53,24 +53,17 @@
  *               (5.2) reset the fields of pages, such as p->ref, p->flags (PageProperty)
  *               (5.3) try to merge low addr or high addr blocks. Notice: should change some pages's p->property correctly.
  */
+free_area_t free_area;
 
-/*free_area_t 结构用于管理空闲内存块，其中 free_list 是一个双向链表，存储所有的空闲页块；nr_free 记录当前系统中的空闲页总数*/
-free_area_t free_area1;
+#define free_list (free_area.free_list)
+#define nr_free (free_area.nr_free)
 
-#define free_list (free_area1.free_list)
-#define nr_free (free_area1.nr_free)
-
-/*default_init 函数用于初始化内存管理模块  将 free_list 初始化为空链表，表示当前没有空闲的物理内存块  nr_free 被设置为 0，表示没有空闲页*/
 static void
 default_init(void) {
     list_init(&free_list);
     nr_free = 0;
 }
 
-/*初始化物理页块 它接受一个 base 地址和 n 代表的页数
-遍历 base 到 base + n 的页面，初始化每页的标志位和引用计数
-将第一个页面的 property 设置为 n，表示该块有 n 页
-使用链表操作将该内存块插入到 free_list 中，以便后续内存分配时可以找到该空闲块*/
 static void
 default_init_memmap(struct Page *base, size_t n) {
     assert(n > 0);
@@ -99,7 +92,6 @@ default_init_memmap(struct Page *base, size_t n) {
     }
 }
 
-//用于分配内存页，采用的是 First-Fit 策略
 static struct Page *
 default_alloc_pages(size_t n) {
     assert(n > 0);
@@ -130,8 +122,6 @@ default_alloc_pages(size_t n) {
     return page;
 }
 
-/*释放内存。它首先将页面重新标记为空闲页块，插入空闲链表，并尝试合并相邻的内存块
-通过比较相邻页块的地址，若它们连续，则会将这些页块合并成更大的空闲块，以减少碎片化*/
 static void
 default_free_pages(struct Page *base, size_t n) {
     assert(n > 0);

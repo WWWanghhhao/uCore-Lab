@@ -86,8 +86,10 @@ size_t nr_free_pages(void) {
     return ret;
 }
 
-//该函数初始化了内存页表和物理内存的布局 它计算了可用物理内存的范围，并通过 init_memmap() 将空闲的物理页添加到内存管理器中
-//对 pages 进行初始化 
+/* 确定了物理内存的布局，包括内存的起始地址、结束地址和总大小
+ * 初始化页描述符数组 pages，并标记内核占用的页面为保留页 
+ * 计算可用物理内存的起始地址和大小，并调用 init 函数进行初始化。
+ */ 
 static void page_init(void) {
     va_pa_offset = PHYSICAL_MEMORY_OFFSET;
 
@@ -107,19 +109,24 @@ static void page_init(void) {
 
     extern char end[];
 
-    npage = maxpa / PGSIZE;
+    npage = maxpa / PGSIZE; // 物理内存页的总数
     //kernel在end[]结束, pages是剩下的页的开始
     pages = (struct Page *)ROUNDUP((void *)end, PGSIZE);
+    // 把 pages 指针指向内核所占空间结束后的第一页
 
+    //一开始把所有页面都设置为保留给内核使用的，之后再设置哪些页面可以分配给其他程序
     for (size_t i = 0; i < npage - nbase; i++) {
         SetPageReserved(pages + i);
     }
 
     uintptr_t freemem = PADDR((uintptr_t)pages + sizeof(struct Page) * (npage - nbase));
-
+   
+    // 计算可用物理内存的起始地址 mem_begin
+    //按照页面大小PGSIZE进行对齐, ROUNDUP, ROUNDDOWN是在libs/defs.h定义的
     mem_begin = ROUNDUP(freemem, PGSIZE);
     mem_end = ROUNDDOWN(mem_end, PGSIZE);
     if (freemem < mem_end) {
+        //初始化我们可以自由使用的物理内存。
         init_memmap(pa2page(mem_begin), (mem_end - mem_begin) / PGSIZE);
     }
 }

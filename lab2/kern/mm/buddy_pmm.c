@@ -1,275 +1,275 @@
-#include <pmm.h>
-#include <list.h>
-#include <string.h>
+#include "memlayout.h"
 #include <buddy_pmm.h>
+#include <list.h>
+#include <pmm.h>
+#include <stdio.h>
+#include <string.h>
 
-free_area_t free_area2;
+#define LEFT_LEAF(index) ((index) * 2 + 1)    // 左子节点
+#define RIGHT_LEAF(index) ((index) * 2 + 2)   // 右子节点
+#define PARENT(index) (((index) + 1) / 2 - 1) // 父节点
+#define IS_POWER_OF_2(x) (!((x) & ((x) - 1)))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-#define free_list (free_area2.free_list)
-#define nr_free (free_area2.nr_free)
+struct buddy2 {
+  unsigned int size;           // 内存块的总大小
+  unsigned int longest[35000]; // 每个节点的最长空闲块大小
+} self;
 
-static size_t total_size;          // the total size of the physical area
-static size_t full_tree_size;      // the size of a full binary tree
-static size_t record_area_size;    // the size of the pages to record the node information
-static size_t real_tree_size;      // the size of the pages to allocate
-static size_t *record_area;        // the head pointer of the record pages
-static struct Page *physical_area; // the head pointer of the memories
-static struct Page *allocate_area; // the head pointer of the memories to allocate
+size_t size;    // 内存块的总大小
+size_t nr_free; // 当前可分配的内存块数量
 
-#define TREE_ROOT (1)
-#define LEFT_CHILD(a) ((a) << 1)
-#define RIGHT_CHILD(a) (((a) << 1) + 1)
-#define PARENT(a) ((a) >> 1)
-#define NODE_LENGTH(a) (full_tree_size / POWER_ROUND_DOWN(a))
-#define NODE_BEGINNING(a) (POWER_REMAINDER(a) * NODE_LENGTH(a))              // the head address of a node
-#define NODE_ENDDING(a) ((POWER_REMAINDER(a) + 1) * NODE_LENGTH(a))          // the end address of a node
-#define BUDDY_BLOCK(a, b) (full_tree_size / ((b) - (a)) + (a) / ((b) - (a))) // get the index of a node by its address
-#define BUDDY_EMPTY(a) (record_area[(a)] == NODE_LENGTH(a))
+struct Page *pages_base; // 内存页的基址指针
 
-#define OR_SHIFT_RIGHT(a, n) ((a) | ((a) >> (n)))
-#define ALL_BIT_TO_ONE(a) (OR_SHIFT_RIGHT(OR_SHIFT_RIGHT(OR_SHIFT_RIGHT(OR_SHIFT_RIGHT(OR_SHIFT_RIGHT(a, 1), 2), 4), 8), 16))
-#define POWER_REMAINDER(a) ((a) & (ALL_BIT_TO_ONE(a) >> 1))
-#define POWER_ROUND_UP(a) (POWER_REMAINDER(a) ? (((a)-POWER_REMAINDER(a)) << 1) : (a))
-#define POWER_ROUND_DOWN(a) (POWER_REMAINDER(a) ? ((a)-POWER_REMAINDER(a)) : (a))
-
-static void buddy_init(void)
-{
-    list_init(&free_list);
-    nr_free = 0;
+unsigned int roundDown(size_t n) {
+  // 找到不大于 n 的最大 2 的整次幂
+  unsigned int m = 0;
+  while ((1 << m) <= n) {
+    m++;
+  }
+  return 1 << (m - 1);
 }
 
-static void buddy_init_memmap(struct Page *base, size_t n)
-{
-    assert(n > 0);
-    struct Page *p;
-    for (p = base; p < base + n; p++)
-    {
-        assert(PageReserved(p));
-        p->flags = p->property = 0;
+unsigned int roundUp(unsigned int size) {
+  // 找到不小于 n 的最小 2 的整次幂
+  unsigned int m = 0;
+  while ((1 << m) < size) {
+    m++;
+  }
+  return 1 << m;
+}
+
+void init(void) {
+  size = 0;
+  nr_free = 0;
+}
+
+void buddy2_init_memmap(struct Page *base, size_t n) {
+  // 初始化内存映射，创建一个大小为不大于 n 的 2 的整数次幂的二叉树
+  unsigned int node_size;
+
+  size = roundDown(n);
+  if (size < 1 || !IS_POWER_OF_2(size)) {
+    return;
+  }
+
+  self.size = size;
+  node_size = size * 2;
+
+  // 清理 [base, base+n] 内存区域
+  struct Page *p = base;
+  for (; p != base + n; p++) {
+    assert(PageReserved(p));
+    p->flags = p->property = 0;
+    set_page_ref(p, 0);
+  }
+
+  base->property = n;
+  SetPageProperty(base);
+  nr_free += size;
+
+  // 通过循环计算每个二叉树节点所监控的内存块大小
+  size_t i;
+  for (i = 0; i < 2 * size - 1; i++) {
+    if (IS_POWER_OF_2(i + 1)) {
+      node_size /= 2;
     }
-    total_size = n;
-    if (n < 512)
-    {
-        full_tree_size = POWER_ROUND_UP(n - 1);
-        record_area_size = 1;
-    }
+    self.longest[i] = node_size;
+  }
+
+  pages_base = base; // pages_base 指向内存页的基址
+}
+
+static struct Page *buddy2_alloc(size_t size) {
+  struct Page *page = NULL;
+  unsigned int index = 0;
+  unsigned int node_size;
+  unsigned int offset = 0;
+
+  if (size <= 0)
+    return NULL;
+
+  if (!IS_POWER_OF_2(size))
+    size = roundUp(size);
+
+  if (self.longest[index] <
+      size) // (根节点)是否有足够大的空闲块。如果不够大，则返回 NULL。
+    return NULL;
+
+  // 从根节点开始遍历二叉树，寻找第一个 >= size 的空闲块
+  for (node_size = self.size; node_size != size; node_size /= 2) {
+    if (self.longest[LEFT_LEAF(index)] >= size)
+      index = LEFT_LEAF(index); // 进左子树
     else
-    {
-        full_tree_size = POWER_ROUND_DOWN(n);
-        record_area_size = full_tree_size * sizeof(size_t) * 2 / PGSIZE;
-        if (n > full_tree_size + (record_area_size << 1))
-        {
-            full_tree_size <<= 1;
-            record_area_size <<= 1;
-        }
-    }
-    real_tree_size = (full_tree_size < total_size - record_area_size) ? full_tree_size : total_size - record_area_size;
+      index = RIGHT_LEAF(index); // 进右子树
+  }
 
-    physical_area = base;
-    record_area = KADDR(page2pa(base));
-    allocate_area = base + record_area_size;
-    memset(record_area, 0, record_area_size * PGSIZE);
+  // 可分配数量减少
+  nr_free -= size;
+  self.longest[index] = 0;
 
-    nr_free += real_tree_size;
-    size_t block = TREE_ROOT;
-    size_t real_subtree_size = real_tree_size;
-    size_t full_subtree_size = full_tree_size;
+  offset = (index + 1) * node_size - self.size;
+  // 向上更新父节点的空闲块大小
+  while (index) {
+    index = PARENT(index);
+    self.longest[index] =
+        MAX(self.longest[LEFT_LEAF(index)], self.longest[RIGHT_LEAF(index)]);
+  }
+  page = offset + pages_base;
 
-    record_area[block] = real_subtree_size;
-    while (real_subtree_size > 0 && real_subtree_size < full_subtree_size)
-    {
-        full_subtree_size >>= 1;
-        if (real_subtree_size > full_subtree_size)
-        {
-            struct Page *page = &allocate_area[NODE_BEGINNING(block)];
-            page->property = full_subtree_size;
-            list_add(&(free_list), &(page->page_link));
-            set_page_ref(page, 0);
-            SetPageProperty(page);
-            record_area[LEFT_CHILD(block)] = full_subtree_size;
-            real_subtree_size -= full_subtree_size;
-            record_area[RIGHT_CHILD(block)] = real_subtree_size;
-            block = RIGHT_CHILD(block);
-        }
-        else
-        {
-            record_area[LEFT_CHILD(block)] = real_subtree_size;
-            record_area[RIGHT_CHILD(block)] = 0;
-            block = LEFT_CHILD(block);
-        }
-    }
+  page->property = size;
+  ClearPageProperty(page);
 
-    if (real_subtree_size > 0)
-    {
-        struct Page *page = &allocate_area[NODE_BEGINNING(block)];
-        page->property = real_subtree_size;
-        set_page_ref(page, 0);
-        SetPageProperty(page);
-        list_add(&(free_list), &(page->page_link));
-    }
+  return page;
 }
 
-static struct Page *buddy_allocate_pages(size_t n)
-{
-    assert(n > 0);
-    struct Page *page;
-    size_t block = TREE_ROOT;
-    size_t length = POWER_ROUND_UP(n);
+static void buddy2_free(struct Page *pg, size_t n) {
+  // 计算给定页数的偏移
+  unsigned int offset = (pg - pages_base);
+  unsigned int node_size = 1, index = 0;
+  unsigned int left_longest, right_longest;
 
-    while (length <= record_area[block] && length < NODE_LENGTH(block))
-    {
-        size_t left = LEFT_CHILD(block);
-        size_t right = RIGHT_CHILD(block);
-        if (BUDDY_EMPTY(block))
-        {
-            size_t begin = NODE_BEGINNING(block);
-            size_t end = NODE_ENDDING(block);
-            size_t mid = (begin + end) >> 1;
-            list_del(&(allocate_area[begin].page_link));
-            allocate_area[begin].property >>= 1;
-            allocate_area[mid].property = allocate_area[begin].property;
-            record_area[left] = record_area[block] >> 1;
-            record_area[right] = record_area[block] >> 1;
-            list_add(&free_list, &(allocate_area[begin].page_link));
-            list_add(&free_list, &(allocate_area[mid].page_link));
-            block = left;
-        }
-        else if (length & record_area[left])
-            block = left;
-        else if (length & record_area[right])
-            block = right;
-        else if (length <= record_area[left])
-            block = left;
-        else if (length <= record_area[right])
-            block = right;
+  assert(offset >= 0 && offset < size);
+
+  // offset = (index+1)*node_size - self.size 这里node_size为1，因为是叶节点
+  index = offset + self.size - 1;
+
+  for (; self.longest[index]; index = PARENT(index)) {
+    node_size *= 2;
+    if (index == 0)
+      return;
+  }
+  // 找到实际分配的中间节点位置，并将此中间节点的值恢复
+  self.longest[index] = node_size;
+  struct Page *p = pg;
+
+  // node_size 是为 pg 分配的内存大小，因此需要将 [pg,pg+node_size]
+  // 的内存区域重置
+  for (; p != pg + node_size; p++) {
+    assert(!PageReserved(p) && !PageProperty(p));
+    p->flags = 0;
+    set_page_ref(p, 0);
+  }
+
+  nr_free += node_size;
+
+  while (index) {
+    index = PARENT(index);
+    node_size *= 2;
+    left_longest = self.longest[LEFT_LEAF(index)];
+    right_longest = self.longest[RIGHT_LEAF(index)];
+    if (left_longest + right_longest == node_size) {
+      self.longest[index] = node_size;
+    } else {
+      self.longest[index] = MAX(left_longest, right_longest);
     }
-    if (length > record_area[block])
-        return NULL;
-    page = &(allocate_area[NODE_BEGINNING(block)]);
-    list_del(&(page->page_link));
-    record_area[block] = 0;
-    nr_free -= length;
-    while (block != TREE_ROOT)
-    {
-        block = PARENT(block);
-        record_area[block] = record_area[LEFT_CHILD(block)] | record_area[RIGHT_CHILD(block)];
-    }
-    return page;
+  }
 }
 
-static void buddy_free_pages(struct Page *base, size_t n)
-{
-    assert(n > 0);
-    struct Page *p = base;
-    size_t length = POWER_ROUND_UP(n);
-    size_t begin = (base - allocate_area);
-    size_t end = begin + length;
-    size_t block = BUDDY_BLOCK(begin, end);
+size_t buddy2_nr_free() { return nr_free; }
 
-    for (; p != base + n; p++)
-    {
-        assert(!PageReserved(p));
-        p->flags = 0;
-        set_page_ref(p, 0);
-    }
-    base->property = length;
-    list_add(&free_list, &(base->page_link));
-    nr_free += length;
-    record_area[block] = length;
+static void buddy2_check(void) {
+  struct Page *p0, *p1, *p2;
+  p0 = p1 = p2 = NULL;
+  assert((p0 = alloc_page()) != NULL);
+  assert((p1 = alloc_page()) != NULL);
+  assert((p2 = alloc_page()) != NULL);
 
-    while (block != TREE_ROOT)
-    {
-        block = PARENT(block);
-        size_t left = LEFT_CHILD(block);
-        size_t right = RIGHT_CHILD(block);
-        if (BUDDY_EMPTY(left) && BUDDY_EMPTY(right))
-        {
-            size_t lbegin = NODE_BEGINNING(left);
-            size_t rbegin = NODE_BEGINNING(right);
-            list_del(&(allocate_area[lbegin].page_link));
-            list_del(&(allocate_area[rbegin].page_link));
-            record_area[block] = record_area[left] << 1;
-            allocate_area[lbegin].property = record_area[left] << 1;
-            list_add(&free_list, &(allocate_area[lbegin].page_link));
-        }
-        else
-            record_area[block] = record_area[LEFT_CHILD(block)] | record_area[RIGHT_CHILD(block)];
-    }
+  assert(p0 != p1 && p0 != p2 && p1 != p2);
+
+  assert(page2pa(p0) < npage * PGSIZE);
+  assert(page2pa(p1) < npage * PGSIZE);
+  assert(page2pa(p2) < npage * PGSIZE);
+
+  unsigned int nr_free_store = nr_free;
+
+  free_page(p0);
+  free_page(p1);
+  free_page(p2);
+  assert(nr_free == size);
+
+  assert((p0 = alloc_page()) != NULL);
+  assert((p1 = alloc_pages(3)) != NULL);
+  assert((p2 = alloc_page()) != NULL);
+
+  free_page(p0);
+  assert(nr_free == size - 5);
+
+  free_page(p1);
+  free_page(p2);
 }
 
-static size_t
-buddy_nr_free_pages(void)
-{
-    return nr_free;
-}
+static void basic_check(void) {
+  cprintf("-----------------------------------------------------"
+          "\n\nThe test process is as follows:\n"
+          "First,alloc   p0 p1 p2  p3\n"
+          "sizes of them 80 40 260 60\n"
+          "the buddy block:    |64+64|64|64|128+128|512|\n"
+          "the pages we alloc: |p0   |p1|p3|empty  |p2|\n"
+          "then,free. p0 p1 p3\n"
+          "now,the first 512 pages are free\n"
+          "then alloc:     p4  p5\n"
+          "sizes of the:   250 250\n"
+          "now,the distribution in memory space are below:\n"
+          "|256|256|256|\n"
+          "|p4 |p5 |p2 |\n"
+          "Last,free all buddy blocks.\n\n"
+          "------------------------------------------------------\n");
 
-static void alloc_check(void)
-{
-    size_t total_size_store = total_size;
-    struct Page *p;
-    for (p = physical_area; p < physical_area + 1026; p++)
-        SetPageReserved(p);
-    buddy_init();
-    buddy_init_memmap(physical_area, 1026);
+  struct Page *p0, *p1, *p2;
+  p0 = p1 = NULL;
+  p2 = NULL;
+  struct Page *p3, *p4, *p5;
+  assert((p0 = alloc_page()) != NULL);
+  assert((p1 = alloc_page()) != NULL);
+  assert((p2 = alloc_page()) != NULL);
+  free_page(p0);
+  free_page(p1);
+  free_page(p2);
 
-    struct Page *p0, *p1, *p2, *p3;
-    p0 = p1 = p2 = NULL;
-    assert((p0 = alloc_page()) != NULL);
-    assert((p1 = alloc_page()) != NULL);
-    assert((p2 = alloc_page()) != NULL);
-    assert((p3 = alloc_page()) != NULL);
+  p0 = alloc_pages(80);
+  p1 = alloc_pages(40);
+  cprintf("p0 %p\n", p0);
+  cprintf("p1 %p\n", p1);
+  cprintf("p1-p0 equal %p ?=128\n", p1 - p0); // 应该差128
 
-    assert(p0 + 1 == p1);
-    assert(p1 + 1 == p2);
-    assert(p2 + 1 == p3);
-    assert(page_ref(p0) == 0 && page_ref(p1) == 0 && page_ref(p2) == 0 && page_ref(p3) == 0);
+  p2 = alloc_pages(260);
+  cprintf("p2 %p\n", p2);
+  cprintf("p2-p1 equal %p ?=128+256\n", p2 - p1); // 应该差384
 
-    assert(page2pa(p0) < npage * PGSIZE);
-    assert(page2pa(p1) < npage * PGSIZE);
-    assert(page2pa(p2) < npage * PGSIZE);
-    assert(page2pa(p3) < npage * PGSIZE);
+  p3 = alloc_pages(60);
+  cprintf("p3 %p\n", p3);
+  cprintf("p3-p1 equal %p ?=64\n", p3 - p1); // 应该差64
 
-    list_entry_t *le = &free_list;
-    while ((le = list_next(le)) != &free_list)
-    {
-        p = le2page(le, page_link);
-        assert(buddy_allocate_pages(p->property) != NULL);
-    }
+  free_pages(p0, 80);
+  cprintf("free p0!\n");
+  free_pages(p1, 40);
+  cprintf("free p1!\n");
+  free_pages(p3, 60);
+  cprintf("free p3!\n");
 
-    assert(alloc_page() == NULL);
+  p4 = alloc_pages(250);
+  cprintf("p4 %p\n", p4);
+  cprintf("p2-p4 equal %p ?=512\n", p2 - p4); // 应该差512
 
-    free_page(p0);
-    free_page(p1);
-    free_page(p2);
-    assert(nr_free == 3);
-
-    assert((p1 = alloc_page()) != NULL);
-    assert((p0 = alloc_pages(2)) != NULL);
-    assert(p0 + 2 == p1);
-
-    assert(alloc_page() == NULL);
-
-    free_pages(p0, 2);
-    free_page(p1);
-    free_page(p3);
-
-    assert((p = alloc_pages(4)) == p0);
-    assert(alloc_page() == NULL);
-
-    assert(nr_free == 0);
-
-    for (p = physical_area; p < physical_area + total_size_store; p++)
-        SetPageReserved(p);
-    buddy_init();
-    buddy_init_memmap(physical_area, total_size_store);
+  p5 = alloc_pages(250);
+  cprintf("p5 %p\n", p5);
+  cprintf("p5-p4 equal %p ?=256\n", p5 - p4); // 应该差256
+  free_pages(p2, 260);
+  cprintf("free p2!\n");
+  free_pages(p4, 250);
+  cprintf("free p4!\n");
+  free_pages(p5, 250);
+  cprintf("free p5!\n");
+  cprintf("CHECK DONE!\n");
 }
 
 const struct pmm_manager buddy_pmm_manager = {
     .name = "buddy_pmm_manager",
-    .init = buddy_init,
-    .init_memmap = buddy_init_memmap,
-    .alloc_pages = buddy_allocate_pages,
-    .free_pages = buddy_free_pages,
-    .nr_free_pages = buddy_nr_free_pages,
-    .check = alloc_check,
+    .init = init,
+    .init_memmap = buddy2_init_memmap,
+    .alloc_pages = buddy2_alloc,
+    .free_pages = buddy2_free,
+    .nr_free_pages = buddy2_nr_free,
+    .check = basic_check,
 };
