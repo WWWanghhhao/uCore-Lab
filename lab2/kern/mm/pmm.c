@@ -12,46 +12,55 @@
 #include <../sync/sync.h>
 #include <riscv.h>
 
+<<<<<<< HEAD
 // virtual address of physical page array
 // pages指针保存的是第一个Page结构体所在的位置，也可以认为是Page结构体组成的数组的开头
 // 由于C语言的特性，可以把pages作为数组名使用，pages[i]表示顺序排列的第i个结构体
+=======
+#include <buddy_pmm.h> //添加buddy system（伙伴系统）分配算法
+#include <slub.h>  // 添加slub分配算法
+
+// virtual address of physical page array 一个指向 Page 结构体的指针，用来管理物理内存中的页表。
+>>>>>>> dev-hmz
 struct Page *pages;
-// amount of physical memory (in pages)
+// amount of physical memory (in pages) 系统中的物理页数量
 size_t npage = 0;
-// the kernel image is mapped at VA=KERNBASE and PA=info.base
+// the kernel image is mapped at VA=KERNBASE and PA=info.base 虚拟地址与物理地址之间的偏移
 uint64_t va_pa_offset;
 // memory starts at 0x80000000 in RISC-V
-// DRAM_BASE defined in riscv.h as 0x80000000
+// DRAM_BASE defined in riscv.h as 0x80000000 基于 DRAM_BASE 计算出的页数，表示内存的基础地址
 const size_t nbase = DRAM_BASE / PGSIZE;
 // DRAM 物理内存起始地址，默认128MB，范围就是 [0x80000000,0x88000000)
 // 有一部分 DRAM 空间被占用（物理内存探测的设计思路）
 // (npage - nbase) 表示物理内存的页数
 
-// virtual address of boot-time page directory
+// virtual address of boot-time page directory 页表的虚拟地址
 uintptr_t *satp_virtual = NULL;
-// physical address of boot-time page directory
+// physical address of boot-time page directory 页表的物理地址
 uintptr_t satp_physical;
 
-// physical memory management
+// physical memory management 管理物理内存的抽象接口
 const struct pmm_manager *pmm_manager;
 
 
 static void check_alloc_page(void);
 
-// init_pmm_manager - initialize a pmm_manager instance
+// init_pmm_manager - initialize a pmm_manager instance 初始化了物理内存管理器 这里使用 best-fit 策略
 static void init_pmm_manager(void) {
-    pmm_manager = &best_fit_pmm_manager;
+    pmm_manager = &best_fit_pmm_manager;//best_fit_pmm_manager  default_pmm_manager buddy_pmm_manager
     cprintf("memory management: %s\n", pmm_manager->name);
     pmm_manager->init();
 }
 
-// init_memmap - call pmm->init_memmap to build Page struct for free memory
+// init_memmap - call pmm->init_memmap to build Page struct for free memory 内存块初始化 
 static void init_memmap(struct Page *base, size_t n) {
     pmm_manager->init_memmap(base, n);
 }
 
 // alloc_pages - call pmm->alloc_pages to allocate a continuous n*PAGESIZE
 // memory
+//分配连续的 n 个页，通过 pmm_manager->alloc_pages(n) 调用内存管理器的具体分配逻辑
+//这段代码使用了局部中断保存和恢复机制，确保内存分配过程中的原子性，避免多线程环境下的竞争条件
 struct Page *alloc_pages(size_t n) {
     struct Page *page = NULL;
     bool intr_flag;
@@ -64,6 +73,7 @@ struct Page *alloc_pages(size_t n) {
 }
 
 // free_pages - call pmm->free_pages to free a continuous n*PAGESIZE memory
+//释放 n 个连续页 调用 pmm_manager->free_pages(base, n) 将指定的物理页块释放回内存管理器
 void free_pages(struct Page *base, size_t n) {
     bool intr_flag;
     local_intr_save(intr_flag);
@@ -74,7 +84,7 @@ void free_pages(struct Page *base, size_t n) {
 }
 
 // nr_free_pages - call pmm->nr_free_pages to get the size (nr*PAGESIZE)
-// of current free memory
+// of current free memory 调用 pmm_manager->nr_free_pages() 来获取当前系统中空闲页的数量
 size_t nr_free_pages(void) {
     size_t ret;
     bool intr_flag;
@@ -131,7 +141,12 @@ static void page_init(void) {
     }
 }
 
-/* pmm_init - initialize the physical memory management */
+/* pmm_init - initialize the physical memory management 
+物理内存管理模块的入口函数
+调用 init_pmm_manager() 初始化内存管理策略
+调用 page_init() 来检测和初始化系统中的可用物理内存
+调用 check_alloc_page() 检查分配功能的正确性
+*/
 void pmm_init(void) {
     // We need to alloc/free the physical memory (granularity is 4KB or other size).
     // So a framework of physical memory manager (struct pmm_manager)is defined in pmm.h
@@ -153,6 +168,7 @@ void pmm_init(void) {
     cprintf("satp virtual address: 0x%016lx\nsatp physical address: 0x%016lx\n", satp_virtual, satp_physical);
 }
 
+//调用 pmm_manager->check() 进行内存分配和释放功能的自检 确保内存管理的分配/释放逻辑正确
 static void check_alloc_page(void) {
     pmm_manager->check();
     cprintf("check_alloc_page() succeeded!\n");

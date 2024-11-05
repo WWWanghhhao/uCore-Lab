@@ -22,7 +22,11 @@ PMP1: 0x0000000000000000-0xffffffffffffffff (A,R,W,X)
 (THU.CST) os is loading ...
 Special kernel symbols:
   entry  0xffffffffc0200032 (virtual)
+<<<<<<< HEAD
   etext  0xffffffffc02019aa (virtual)
+=======
+  etext  0xffffffffc02019a8 (virtual)
+>>>>>>> dev-hmz
   edata  0xffffffffc0206010 (virtual)
   end    0xffffffffc0206470 (virtual)
 Kernel executable memory footprint: 26KB
@@ -57,6 +61,7 @@ satp physical address: 0x0000000080205000
 100 ticks
 100 ticks
 100 ticks
+<<<<<<< HEAD
 100 ticks
 100 ticks
 100 ticks
@@ -85,3 +90,5 @@ satp physical address: 0x0000000080205000
 100 ticks
 100 ticks
 100 ticks
+=======
+>>>>>>> dev-hmz

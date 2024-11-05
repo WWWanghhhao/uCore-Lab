@@ -83,6 +83,7 @@ void print_regs(struct pushregs *gpr) {
 }
 
 void interrupt_handler(struct trapframe *tf) {
+<<<<<<< HEAD
   intptr_t cause = (tf->cause << 1) >> 1;
   switch (cause) {
   case IRQ_U_SOFT:
@@ -123,6 +124,69 @@ void interrupt_handler(struct trapframe *tf) {
         num = 0;
         sbi_shutdown();
       }
+=======
+    intptr_t cause = (tf->cause << 1) >> 1;
+    switch (cause) {
+        case IRQ_U_SOFT:
+            cprintf("User software interrupt\n");
+            break;
+        case IRQ_S_SOFT:
+            cprintf("Supervisor software interrupt\n");
+            break;
+        case IRQ_H_SOFT:
+            cprintf("Hypervisor software interrupt\n");
+            break;
+        case IRQ_M_SOFT:
+            cprintf("Machine software interrupt\n");
+            break;
+        case IRQ_U_TIMER:
+            cprintf("User software interrupt\n");
+            break;
+        case IRQ_S_TIMER:
+            // "All bits besides SSIP and USIP in the sip register are
+            // read-only." -- privileged spec1.9.1, 4.1.4, p59
+            // In fact, Call sbi_set_timer will clear STIP, or you can clear it
+            // directly.
+            // cprintf("Supervisor timer interrupt\n");
+             /* LAB1 EXERCISE2   YOUR CODE :2211804  */
+            /*(1)设置下次时钟中断- clock_set_next_event()
+             *(2)计数器（ticks）加一
+             *(3)当计数器加到100的时候，我们会输出一个`100ticks`表示我们触发了100次时钟中断，同时打印次数（num）加一
+            * (4)判断打印次数，当打印次数为10时，调用<sbi.h>中的关机函数关机
+            */
+
+            clock_set_next_event();//源代码在clock.c
+            ticks++;
+            if(ticks%TICK_NUM==0){
+                print_ticks();
+                num++;
+            }
+            if(num==10){
+                sbi_shutdown();
+            }
+            break;
+        case IRQ_H_TIMER:
+            cprintf("Hypervisor software interrupt\n");
+            break;
+        case IRQ_M_TIMER:
+            cprintf("Machine software interrupt\n");
+            break;
+        case IRQ_U_EXT:
+            cprintf("User software interrupt\n");
+            break;
+        case IRQ_S_EXT:
+            cprintf("Supervisor external interrupt\n");
+            break;
+        case IRQ_H_EXT:
+            cprintf("Hypervisor software interrupt\n");
+            break;
+        case IRQ_M_EXT:
+            cprintf("Machine software interrupt\n");
+            break;
+        default:
+            print_trapframe(tf);
+            break;
+>>>>>>> 716958834b48ecaf18562a46466dd27072437116
     }
 
     break;
@@ -151,6 +215,7 @@ void interrupt_handler(struct trapframe *tf) {
 }
 
 void exception_handler(struct trapframe *tf) {
+<<<<<<< HEAD
   switch (tf->cause) {
   case CAUSE_MISALIGNED_FETCH:
     break;
@@ -199,6 +264,55 @@ void exception_handler(struct trapframe *tf) {
     print_trapframe(tf);
     break;
   }
+=======
+    switch (tf->cause) {
+        case CAUSE_MISALIGNED_FETCH:
+            break;
+        case CAUSE_FAULT_FETCH:
+            break;
+        case CAUSE_ILLEGAL_INSTRUCTION:
+             // 非法指令异常处理
+             /* LAB1 CHALLENGE3   YOUR CODE : 2211804 */
+            /*(1)输出指令异常类型（ Illegal instruction）
+             *(2)输出异常指令地址
+             *(3)更新 tf->epc寄存器
+            */
+            cprintf("指令异常类型:Illegal instruction\n");
+            cprintf("异常指令地址%p\n",tf->epc);
+            tf->epc += 4;
+            break;
+        case CAUSE_BREAKPOINT:
+            //断点异常处理
+            /* LAB1 CHALLLENGE3   YOUR CODE : 2211804 */
+            /*(1)输出指令异常类型（ breakpoint）
+             *(2)输出异常指令地址
+             *(3)更新 tf->epc寄存器
+            */
+            cprintf("指令异常类型:Illegal instruction\n");
+            cprintf("异常指令地址%p\n",tf->epc);
+            tf->epc += 2;
+            break;
+        case CAUSE_MISALIGNED_LOAD:
+            break;
+        case CAUSE_FAULT_LOAD:
+            break;
+        case CAUSE_MISALIGNED_STORE:
+            break;
+        case CAUSE_FAULT_STORE:
+            break;
+        case CAUSE_USER_ECALL:
+            break;
+        case CAUSE_SUPERVISOR_ECALL:
+            break;
+        case CAUSE_HYPERVISOR_ECALL:
+            break;
+        case CAUSE_MACHINE_ECALL:
+            break;
+        default:
+            print_trapframe(tf);
+            break;
+    }
+>>>>>>> 716958834b48ecaf18562a46466dd27072437116
 }
 
 /* trap_dispatch - dispatch based on what type of trap occurred */
