@@ -117,7 +117,7 @@ find_vma(struct mm_struct *mm, uintptr_t addr) {
 }
 
 
-// check_vma_overlap - check if vma1 overlaps vma2 ?
+// check_vma_overlap - check if vma1 overlaps vma2 ?//在插入一个新的vma_struct之前，我们要保证它和原有的区间都不重合。
 static inline void
 check_vma_overlap(struct vma_struct *prev, struct vma_struct *next) {
     assert(prev->vm_start < prev->vm_end);
@@ -144,7 +144,7 @@ insert_vma_struct(struct mm_struct *mm, struct vma_struct *vma) {
 
     le_next = list_next(le_prev);
 
-    /* check overlap */
+    /* check overlap *///检查新插入的虚拟内存区域是否与前后相邻的区域重叠
     if (le_prev != list) {
         check_vma_overlap(le2vma(le_prev, list_link), vma);
     }
@@ -373,7 +373,8 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
     *
     */
 
-
+    /*调用 get_pte 查找页表项。如果页表项为空（页不在内存中），则分配一页内存并更新页表
+    。如果页表项存在，但该页面在交换区中，则调用 swap_in 从磁盘中读取数据到内存。*/
     ptep = get_pte(mm->pgdir, addr, 1);  //(1) try to find a pte, if pte's
                                          //PT(Page Table) isn't existed, then
                                          //create a PT.
@@ -406,6 +407,16 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
             //map of phy addr <--->
             //logical addr
             //(3) make the page swappable.
+            //在swap_in()函数执行完之后，page保存换入的物理页面。
+            //swap_in()函数里面可能把内存里原有的页面换出去
+            swap_in(mm, addr, &page);  //(1）According to the mm AND addr, try
+                                       //to load the content of right disk page
+                                       //into the memory which page managed.
+            page_insert(mm->pgdir, page, addr, perm); //更新页表，插入新的页表项
+            //(2) According to the mm, addr AND page, 
+            // setup the map of phy addr <---> virtual addr
+            swap_map_swappable(mm, addr, page, 1);  //(3) make the page swappable.
+            //标记这个页面将来是可以再换出的
             page->pra_vaddr = addr;
         } else {
             cprintf("no swap_init_ok but ptep is %x, failed\n", *ptep);

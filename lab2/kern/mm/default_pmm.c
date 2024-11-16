@@ -60,22 +60,34 @@ free_area_t free_area1;
 #define free_list (free_area1.free_list)
 #define nr_free (free_area1.nr_free)//nr_free可以理解为在这里可以使用的一个全局变量，记录可用的物理页面数
 
+//init the free_list and set nr_free to 0.
 static void
 default_init(void) {
     list_init(&free_list);
     nr_free = 0;
 }
 
+/*CALL GRAPH: kern_init --> pmm_init-->page_init-->init_memmap--> pmm_manager->init_memmap
+ *              This fun is used to init a free block (with parameter: addr_base, page_number).
+ *              First you should init each page (in memlayout.h) in this free block, include:
+ *                  p->flags should be set bit PG_property (means this page is valid. In pmm_init fun (in pmm.c),
+ *                  the bit PG_reserved is setted in p->flags)
+ *                  if this page  is free and is not the first page of free block, p->property should be set to 0.
+ *                  if this page  is free and is the first page of free block, p->property should be set to total num of block.
+ *                  p->ref should be 0, because now p is free and no reference.
+ *                  We can use p->page_link to link this page to free_list, (such as: list_add_before(&free_list, &(p->page_link)); )
+ *              Finally, we should sum the number of free mem block: nr_free+=n*/
 static void
 default_init_memmap(struct Page *base, size_t n) {
     assert(n > 0);
+    //First you should init each page
     struct Page *p = base;
     for (; p != base + n; p ++) {
         assert(PageReserved(p));
         p->flags = p->property = 0;
         set_page_ref(p, 0);
     }
-    base->property = n;
+    base->property = n;//num of free block
     SetPageProperty(base);
     nr_free += n;
     if (list_empty(&free_list)) {
@@ -94,6 +106,23 @@ default_init_memmap(struct Page *base, size_t n) {
     }
 }
 
+/*search find a first free block (block size >=n) in free list and reszie the free block, return the addr
+ *              of malloced block.
+ *              (4.1) So you should search freelist like this:
+ *                       list_entry_t le = &free_list;
+ *                       while((le=list_next(le)) != &free_list) {
+ *                       ....
+ *                 (4.1.1) In while loop, get the struct page and check the p->property (record the num of free block) >=n?
+ *                       struct Page *p = le2page(le, page_link);
+ *                       if(p->property >= n){ ...
+ *                 (4.1.2) If we find this p, then it' means we find a free block(block size >=n), and the first n pages can be malloced.
+ *                     Some flag bits of this page should be setted: PG_reserved =1, PG_property =0
+ *                     unlink the pages from free_list
+ *                     (4.1.2.1) If (p->property >n), we should re-caluclate number of the the rest of this free block,
+ *                           (such as: le2page(le,page_link))->property = p->property - n;)
+ *                 (4.1.3)  re-caluclate nr_free (number of the the rest of all free block)
+ *                 (4.1.4)  return p
+ *               (4.2) If we can not find a free block (block size >=n), then return NULL*/
 static struct Page *
 default_alloc_pages(size_t n) {
     assert(n > 0);
@@ -124,6 +153,12 @@ default_alloc_pages(size_t n) {
     return page;
 }
 
+/*
+(5) default_free_pages: relink the pages into  free list, maybe merge small free blocks into big free blocks.
+ *               (5.1) according the base addr of withdrawed blocks, search free list, find the correct position
+ *                     (from low to high addr), and insert the pages. (may use list_next, le2page, list_add_before)
+ *               (5.2) reset the fields of pages, such as p->ref, p->flags (PageProperty)
+ *               (5.3) try to merge low addr or high addr blocks. Notice: should change some pages's p->property correctly.*/
 static void
 default_free_pages(struct Page *base, size_t n) {
     assert(n > 0);
@@ -151,7 +186,7 @@ default_free_pages(struct Page *base, size_t n) {
             }
         }
     }
-
+    // try to merge low addr or high addr blocks. Notice: should change some pages's p->property correctly
     list_entry_t* le = list_prev(&(base->page_link));
     if (le != &free_list) {
         p = le2page(le, page_link);

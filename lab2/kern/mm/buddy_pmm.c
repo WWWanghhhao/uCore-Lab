@@ -57,10 +57,10 @@ buddy_init_memmap(struct Page *base, size_t n) {
 
     for (size_t i = 0; i < 2 * size - 1; ++i) {
         if (IS_POWER_OF_2(i+1))
-        node_size /= 2;
+            node_size /= 2;
         self->longest[i] = node_size;
     }
-    buddy_base=base;
+    //buddy_base=base;
 }
 
 static struct Page *
@@ -148,41 +148,59 @@ buddy_nr_free_pages(void) {
     return nr_free;
 }
 
-static void
-buddy2_check(void) {
-     struct Page *p0, *p1, *p2;
-     p0 = p1 = p2 = NULL;
-     assert((p0 = alloc_page()) != NULL);
-     assert((p1 = alloc_page()) != NULL);
-     assert((p2 = alloc_page()) != NULL);
+static void advanced_check(void) {
+    /*cprintf(
+    "-----------------------------------------------------"
+    "\n\nThe advanced test process is as follows:\n"
+    "First, alloc p0, p1, p2, and p3\n"
+    "sizes of them 128 64 256 32\n"
+    "the buddy block: |128|128|256|256|\n"
+    "the pages we alloc: |p0 |p1 |p2 |p3 |\n"
+    "Then, free p1 and p3\n"
+    "Now, the memory distribution in memory space is below:\n"
+    "|128|128|256|  |256|\n"
+    "|p0 |  |  |  |  |\n"
+    "Next, alloc p4 and p5\n"
+    "sizes of them: 64 64\n"
+    "Now, the distribution in memory space is:\n"
+    "|128|128|256|64|256|\n"
+    "|p0 |  |  |p4|  |\n"
+    "Finally, free all allocated pages and check the memory status.\n"
+    "------------------------------------------------------\n");*/
 
-     assert(p0 != p1 && p0 != p2 && p1 != p2);
+    struct Page *p0, *p1, *p2, *p3;
+    struct Page *p4, *p5;
+    
+    assert((p0 = alloc_pages(128)) != NULL);
+    assert((p1 = alloc_pages(64)) != NULL);
+    assert((p2 = alloc_pages(256)) != NULL);
+    assert((p3 = alloc_pages(32)) != NULL);
 
-     assert(page2pa(p0) < npage * PGSIZE);
-     assert(page2pa(p1) < npage * PGSIZE);
-     assert(page2pa(p2) < npage * PGSIZE);
-
-
-    unsigned int nr_free_store = nr_free;
-
-    free_page(p0);
     free_page(p1);
-    free_page(p2);
+    free_page(p3);
+
+    assert((p4 = alloc_pages(64)) != NULL);
+    assert((p5 = alloc_pages(64)) != NULL);
+
+    cprintf("p0 address: %p\n", p0);
+    cprintf("p1 address: %p\n", p1);
+    cprintf("p2 address: %p\n", p2);
+    cprintf("p3 address: %p\n", p3);
+    cprintf("p4 address: %p\n", p4);
+    cprintf("p5 address: %p\n", p5);
+
+    free_pages(p0, 128);
+    free_pages(p2, 256);
+    free_pages(p4, 64);
+    free_pages(p5, 64);
+
     assert(nr_free == size);
-
-    assert((p0 = alloc_page()) != NULL);
-    assert((p1 = alloc_pages(3)) != NULL);
-    assert((p2 = alloc_page()) != NULL);
-
-
-    free_page(p0);
-    assert(nr_free == size-5);
-
-    free_page(p1);
-    free_page(p2);
+    cprintf("CHECK DONE! All pages freed successfully.\n");
 }
 
+
 static void basic_check(void) {
+/*    
 cprintf(
 "-----------------------------------------------------"
 "\n\nThe test process is as follows:\n"
@@ -200,7 +218,7 @@ cprintf(
 "Last,free all buddy blocks.\n"
 "Notice!addr of pointer is the base addr of the buddy block\n"
 "we use cprintf() show the progress and if you want, you can use assert() to judge.\n\n"
-"------------------------------------------------------\n");
+"------------------------------------------------------\n");*/
 
     struct Page *p0, *p1,*p2;
     p0 = p1 = NULL;
@@ -215,18 +233,18 @@ cprintf(
     
     p0=alloc_pages(70);
     p1=alloc_pages(35);
-    //注意，一个结构体指针是20个字节，有3个int,3*4，还有一个双向链表,两个指针是8。加载一起是20。
+
     cprintf("p0 %p\n",p0);
     cprintf("p1 %p\n",p1);
-    cprintf("p1-p0 equal %p ?=128\n",p1-p0);//应该差128
+    cprintf("p1-p0 equal %p ?=128\n",p1-p0);
     
     p2=alloc_pages(257);
     cprintf("p2 %p\n",p2);
-    cprintf("p2-p1 equal %p ?=128+256\n",p2-p1);//应该差384
+    cprintf("p2-p1 equal %p ?=128+256\n",p2-p1);
     
     p3=alloc_pages(63);
     cprintf("p3 %p\n",p3);
-    cprintf("p3-p1 equal %p ?=64\n",p3-p1);//应该差64
+    cprintf("p3-p1 equal %p ?=64\n",p3-p1);
     
     free_pages(p0,70);    
     cprintf("free p0!\n");
@@ -237,11 +255,11 @@ cprintf(
     
     p4=alloc_pages(255);
     cprintf("p4 %p\n",p4);
-    cprintf("p2-p4 equal %p ?=512\n",p2-p4);//应该差512
+    cprintf("p2-p4 equal %p ?=512\n",p2-p4);
     
     p5=alloc_pages(255);
     cprintf("p5 %p\n",p5);
-    cprintf("p5-p4 equal %p ?=256\n",p5-p4);//应该差256
+    cprintf("p5-p4 equal %p ?=256\n",p5-p4);
         free_pages(p2,257);    
     cprintf("free p2!\n");
         free_pages(p4,255);    

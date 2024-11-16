@@ -88,7 +88,7 @@ swap_out(struct mm_struct *mm, int n, int in_tick)
           //struct Page **ptr_page=NULL;
           struct Page *page;
           // cprintf("i %d, SWAP: call swap_out_victim\n",i);
-          int r = sm->swap_out_victim(mm, &page, in_tick);
+          int r = sm->swap_out_victim(mm, &page, in_tick);//调用页面置换算法的接口
           if (r != 0) {
                     cprintf("i %d, swap_out: call swap_out_victim failed\n",i);
                   break;
@@ -101,7 +101,7 @@ swap_out(struct mm_struct *mm, int n, int in_tick)
           pte_t *ptep = get_pte(mm->pgdir, v, 0);
           assert((*ptep & PTE_V) != 0);
 
-          if (swapfs_write( (page->pra_vaddr/PGSIZE+1)<<8, page) != 0) {
+          if (swapfs_write( (page->pra_vaddr/PGSIZE+1)<<8, page) != 0) {//尝试把要换出的物理页面写到硬盘上的交换区，返回值不为0说明失败了
                     cprintf("SWAP: failed to save\n");
                     sm->map_swappable(mm, v, page, 0);
                     continue;
@@ -111,7 +111,8 @@ swap_out(struct mm_struct *mm, int n, int in_tick)
                     *ptep = (page->pra_vaddr/PGSIZE+1)<<8;
                     free_page(page);
           }
-          
+          //由于页表改变了，需要刷新TLB
+          //思考： swap_in()的时候插入新的页表项之后在哪里刷新了TLB?
           tlb_invalidate(mm->pgdir, v);
      }
      return i;
@@ -125,7 +126,7 @@ swap_in(struct mm_struct *mm, uintptr_t addr, struct Page **ptr_result)
 
      pte_t *ptep = get_pte(mm->pgdir, addr, 0);
      // cprintf("SWAP: load ptep %x swap entry %d to vaddr 0x%08x, page %x, No %d\n", ptep, (*ptep)>>8, addr, result, (result-pages));
-    
+     //将物理地址映射到虚拟地址是在swap_in()退出之后，调用page_insert()完成的
      int r;
      if ((r = swapfs_read((*ptep), result)) != 0)
      {

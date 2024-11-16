@@ -47,8 +47,8 @@ size_t nr_free_pages(void);
 
 pte_t *get_pte(pde_t *pgdir, uintptr_t la, bool create);
 struct Page *get_page(pde_t *pgdir, uintptr_t la, pte_t **ptep_store);
-void page_remove(pde_t *pgdir, uintptr_t la);
-int page_insert(pde_t *pgdir, struct Page *page, uintptr_t la, uint32_t perm);
+void page_remove(pde_t *pgdir, uintptr_t la);//在页表里删除一个映射
+int page_insert(pde_t *pgdir, struct Page *page, uintptr_t la, uint32_t perm);//在页表里建立一个映射
 
 void tlb_invalidate(pde_t *pgdir, uintptr_t la);
 struct Page *pgdir_alloc_page(pde_t *pgdir, uintptr_t la, uint32_t perm);
@@ -118,7 +118,7 @@ static inline struct Page *pde2page(pde_t pde) {
     return pa2page(PDE_ADDR(pde));
 }
 
-static inline int page_ref(struct Page *page) { return page->ref; }
+static inline int page_ref(struct Page *page) { return page->ref; }//检查映射关系是否实现，这个函数会返回一个物理页面被多少个虚拟页面所对应。
 
 static inline void set_page_ref(struct Page *page, int val) { page->ref = val; }
 
