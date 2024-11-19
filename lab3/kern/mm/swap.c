@@ -27,6 +27,35 @@ unsigned int swap_page[CHECK_VALID_VIR_PAGE_NUM];
 unsigned int swap_in_seq_no[MAX_SEQ_NO],swap_out_seq_no[MAX_SEQ_NO];
 
 static void check_swap(void);
+/*模块初始化
+swap_init：
+
+初始化交换文件系统 swapfs_init。
+检查 max_swap_offset 是否在有效范围内（假定模拟 IDE 磁盘存储的页面数量限制为 7）。
+初始化指定的置换算法（此处为 swap_manager_clock）。
+通过 check_swap 验证置换功能的正确性。
+swap_init_mm：
+
+调用具体置换算法的 init_mm 方法，为新的内存管理结构初始化所需数据。
+页面管理
+swap_map_swappable：
+
+将某页面标记为可被置换，并调用页面置换算法的对应接口。
+swap_set_unswappable：
+
+从置换队列中移除指定页面，标记为不可置换。
+swap_tick_event：
+
+处理周期性事件，用于时钟算法中更新页面访问记录（如 visited 标志）。
+页面置换
+swap_out：
+尝试将 n 个页面置换出内存。
+通过 swap_out_victim 从页面管理器中选择受害者页面。
+将受害者页面写入磁盘的交换区（swapfs_write），并从内存中释放。
+更新页表项指向交换区地址，并刷新 TLB。
+swap_in：
+从交换区中加载页面到物理内存（swapfs_read）。
+返回结果页面以插入内存。*/
 
 int
 swap_init(void)

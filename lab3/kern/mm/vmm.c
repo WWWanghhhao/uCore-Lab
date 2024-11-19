@@ -53,7 +53,16 @@ void print_mm(char *name, struct mm_struct *mm){
 		print_vma(name, le2vma(list,list_link));
 	}
 }
+/*主要结构
 
+mm_struct：管理一组连续的虚拟内存区域（VMA），对应同一个页表。
+vma_struct：描述一个连续的虚拟内存区域，包括起始地址、结束地址、标志等。
+核心函数
+
+mm_create 和 mm_destroy：创建和销毁内存管理结构。
+vma_create 和 insert_vma_struct：创建和插入虚拟内存区域。
+find_vma：查找与地址相关的 VMA。
+check_vma_overlap：确保 VMA 插入时不与现有的 VMA 重叠。*/
 static void check_vmm(void);
 static void check_vma_struct(void);
 static void check_pgfault(void);
