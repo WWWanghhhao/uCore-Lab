@@ -37,16 +37,26 @@ struct context {
 #define MAX_PID                     (MAX_PROCESS * 2)
 
 extern list_entry_t proc_list;
-
+//PCB
 struct proc_struct {
+    //进程状态有四种：分别是PROC_UNINIT、PROC_SLEEPING、PROC_RUNNABLE、PROC_ZOMBIE。
     enum proc_state state;                      // Process state
+    
     int pid;                                    // Process ID
     int runs;                                   // the running times of Proces
+    // 2 个连续的物理页（参见memlayout.h中KSTACKSIZE的定义）作为内核栈的空间
     uintptr_t kstack;                           // Process kernel stack
     volatile bool need_resched;                 // bool value: need to be rescheduled to release CPU?
+    /*只有内核创建的idle进程没有父进程，其他进程都有父进程。
+    进程的父子关系组成了一棵进程树，这种父子关系有利于维护父进程对于子进程的一些特殊操作。*/
     struct proc_struct *parent;                 // the parent process
-    struct mm_struct *mm;                       // Process's memory management field
+    struct mm_struct *mm;   //这里面保存了内存管理的信息，包括内存映射，虚存管理等内容。
+                        // Process's memory management field
+    /*几个关键的寄存器的值。这些寄存器的值用于在进程切换中还原之前进程的运行状态。
+    切换过程的实现在kern/process/switch.S。*/
     struct context context;                     // Switch here to run process
+    /*当进程从用户空间跳进内核空间的时候，进程的执行状态被保存在了中断帧中（注意这里需要保存的执行状态数量不同于上下文切换）。
+    系统调用可能会改变用户寄存器的值，我们可以通过调整中断帧来使得系统调用返回特定的值。*/
     struct trapframe *tf;                       // Trap frame for current interrupt
     uintptr_t cr3;                              // CR3 register: the base addr of Page Directroy Table(PDT)
     uint32_t flags;                             // Process flag

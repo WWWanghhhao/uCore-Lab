@@ -108,9 +108,13 @@ __trapret:
     RESTORE_ALL
     # go back from supervisor call
     sret
+    #设置内核线程时，epc 成员设置为了 kernel_thread_entry 所以此时 __trapret 会将跳转到 kernel_thread_entry
  
     .globl forkrets
 forkrets:
     # set stack to this new process's trapframe
     move sp, a0
     j __trapret
+# 首先将 sp 设置为 a0 并且恢复 trapframe 中的所有的上下文，
+# 之后使用 sret 指令返回 sepc 对应的地址。
+# 所以在 forkret 中将参数设置为当前进程 current 的 tf。
